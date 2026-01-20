@@ -1,11 +1,15 @@
 import { prisma } from "@/lib/prisma";
+import type { NextRequest } from "next/server";
 
-export async function PATCH(req: Request, ctx: { params: { id: string } }) {
-  const { id } = ctx.params;
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
 
   const body = await req.json();
   const displayName = body.displayName as string | undefined;
-  const phone = body.phone as string | undefined;
+  const phone = body.phone as string | null | undefined;
   const isActive = body.isActive as boolean | undefined;
   const sortOrder = body.sortOrder as number | undefined;
 
