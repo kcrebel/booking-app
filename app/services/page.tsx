@@ -22,6 +22,16 @@ type Service = {
   staffLinks?: { staff: Staff }[];
 };
 
+async function safeReadJson(res: Response) {
+  const text = await res.text(); // read once
+  if (!text) return { __empty: true };
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { __nonJson: true, text };
+  }
+}
+
 function centsToDollars(cents: number) {
   return (cents / 100).toFixed(2);
 }
@@ -55,16 +65,29 @@ export default function ServicesPage() {
   async function loadAll() {
     setLoading(true);
     setError(null);
+
     try {
       const [sRes, svcRes] = await Promise.all([
         fetch("/api/staff", { cache: "no-store" }),
         fetch("/api/services", { cache: "no-store" }),
       ]);
-      const sData = await sRes.json();
-      const svcData = await svcRes.json();
 
-      if (!sRes.ok || !sData.ok) throw new Error(sData.error || "Failed to load staff");
-      if (!svcRes.ok || !svcData.ok) throw new Error(svcData.error || "Failed to load services");
+      const sData = await safeReadJson(sRes);
+      const svcData = await safeReadJson(svcRes);
+
+      if (!sRes.ok || !sData.ok) {
+        throw new Error(
+          `Staff API failed (${sRes.status}) ` +
+            (sData?.error || sData?.text || "Empty/Non-JSON response")
+        );
+      }
+
+      if (!svcRes.ok || !svcData.ok) {
+        throw new Error(
+          `Services API failed (${svcRes.status}) ` +
+            (svcData?.error || svcData?.text || "Empty/Non-JSON response")
+        );
+      }
 
       setStaff(sData.staff);
       setServices(svcData.services);
@@ -102,8 +125,14 @@ export default function ServicesPage() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to create service");
+      const data = await safeReadJson(res);
+
+      if (!res.ok || !data.ok) {
+        throw new Error(
+          `Create service failed (${res.status}) ` +
+            (data?.error || data?.text || "Empty/Non-JSON response")
+        );
+      }
 
       setName("");
       setDurationMin(30);
@@ -121,14 +150,23 @@ export default function ServicesPage() {
 
   async function patchService(id: string, patch: any) {
     setError(null);
+
     try {
       const res = await fetch(`/api/services/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to update service");
+
+      const data = await safeReadJson(res);
+
+      if (!res.ok || !data.ok) {
+        throw new Error(
+          `Update service failed (${res.status}) ` +
+            (data?.error || data?.text || "Empty/Non-JSON response")
+        );
+      }
+
       await loadAll();
     } catch (e: any) {
       setError(e.message || "Unknown error");
@@ -254,10 +292,7 @@ export default function ServicesPage() {
             const assignedNames = (svc.staffLinks ?? []).map((x) => x.staff.displayName).join(", ");
 
             return (
-              <div
-                key={svc.id}
-                style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16 }}
-              >
+              <div key={svc.id} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 18, fontWeight: 800 }}>{svc.name}</div>
@@ -319,7 +354,14 @@ export default function ServicesPage() {
                       />
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 12 }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr",
+                        gap: 12,
+                        marginTop: 12,
+                      }}
+                    >
                       <input
                         defaultValue={centsToDollars(svc.depositCents)}
                         onBlur={(e) => {
@@ -360,7 +402,10 @@ export default function ServicesPage() {
                         {activeStaff.map((s) => {
                           const checked = assigned.has(s.id);
                           return (
-                            <label key={s.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <label
+                              key={s.id}
+                              style={{ display: "flex", gap: 8, alignItems: "center" }}
+                            >
                               <input
                                 type="checkbox"
                                 defaultChecked={checked}
